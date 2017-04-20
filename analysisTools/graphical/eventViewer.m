@@ -1,4 +1,4 @@
-function eventViewer(allEvents, eventNames, timeWindow, colors)
+function eventViewer(allEvents, eventNames, timeWindow)
 %eventViewer(allEvents, eventNames, timeWindow, colors)
 %
 %Plot event rasters
