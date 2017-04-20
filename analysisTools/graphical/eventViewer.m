@@ -9,6 +9,7 @@ function eventViewer(allEvents, eventNames, timeWindow)
 %Plots them using colors (1xnumEvents cell array of colors, e.g., 'r' or [0 1 0])
 
 numEvents = length(allEvents);
+colors = mat2cell(parula(numEvents), ones(1,numEvents), 3)';
 
 for eventNum = 1: numEvents
     tmpEvents = allEvents{eventNum};
@@ -18,7 +19,7 @@ for eventNum = 1: numEvents
     tmpEvents = reshape(tmpEvents, 1, numTimes);
     %yLims = [eventNum-1 eventNum] #used for debugging
     line([tmpEvents; tmpEvents], [zeros(1,numTimes)+eventNum-1; eventNum*ones(1,numTimes)], ...
-        'Color', colors{eventNum}, 'LineWidth', 1); 
+        'Color', colors{eventNum}, 'LineWidth', 1);
 end
 
 axis([timeWindow 0 numEvents])
