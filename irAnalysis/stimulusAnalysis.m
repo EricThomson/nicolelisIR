@@ -49,10 +49,13 @@ end
 numTrialsEvents = length(onIR);
 if numTrialsEvents ~= numTrialsSess
     warning('Num trials from irOn events is not same as from session');
+    numTrials = numTrialsSess;
 else
     display('N is the same using irOn events and sessDat...Bullseye!');
     numTrials = numTrialsSess;
 end
+
+
 
 %View raw events in event viewer
 allEvents ={onIR, stimClock, chanA, chanB, chanC, chanD};
@@ -89,13 +92,13 @@ end
 %% Get time of first and last stimClock on each trial (trialFirstClockTimes, trialLastClockTimes)
 %   Note on some trials there may be none, for instance if the button was locked on
 %   so it was an immediate error. For these, use trial onset time, onset time + .05.
-trialOnsetTimes = onIR;
+trialOnsetTimes = onIR(1:numTrials);
 
-trialFirstClockTimes = zeros(1,numTrialsEvents);
-trialLastClockTimes = zeros(1,numTrialsEvents);
-for trialNum = 1:numTrialsEvents
+trialFirstClockTimes = zeros(1,numTrials);
+trialLastClockTimes = zeros(1,numTrials);
+for trialNum = 1:numTrials
     trialOnsetTime = trialOnsetTimes(trialNum);
-    if trialNum < numTrialsEvents %if not last trial, then use next trial onset as upper bound
+    if trialNum < numTrials %if not last trial, then use next trial onset as upper bound
         nextTrialTime = trialOnsetTimes(trialNum + 1);
         trialClockInds = find(stimClock > trialOnsetTime & stimClock < nextTrialTime);
         if ~isempty(trialClockInds) %clock events during trial
@@ -121,8 +124,8 @@ end
 if plotFull
     figure;
     eventViewer({stimClock}, {'Clock'}, timeWindow, {'b'}); hold on
-    scatter(trialFirstClockTimes, 0.5*ones(1,numTrialsEvents), 20,'filled','g');
-    scatter(trialLastClockTimes,  0.5*ones(1,numTrialsEvents), 20,'filled','m'); 
+    scatter(trialFirstClockTimes, 0.5*ones(1,numTrials), 20,'filled','g');
+    scatter(trialLastClockTimes,  0.5*ones(1,numTrials), 20,'filled','m'); 
     title('Green is clock onset, magenta offset, for a given trial')
 end
     
@@ -131,10 +134,10 @@ end
 %integration task has two ir indicators per trial
 if isequal(sessDat.protocol, 'irVisualIntegrationTask')
     %sessDat.data.stimuli_visir is correct
-    corrIncorrVals = sessDat.data.stimuli_visir(1:numTrialsEvents) == sessDat.data.behavior(1:numTrialsEvents); 
+    corrIncorrVals = sessDat.data.stimuli_visir(1:numTrials) == sessDat.data.behavior(1:numTrials); 
 else
-    irOnlyVals = sessDat.data.ir_only_list(1:numTrialsEvents);   %0: ir+vis, 1: ir only
-    corrIncorrVals = sessDat.data.stimuli(1:numTrialsEvents) == sessDat.data.behavior(1:numTrialsEvents); 
+    irOnlyVals = sessDat.data.ir_only_list(1:numTrials);   %0: ir+vis, 1: ir only
+    corrIncorrVals = sessDat.data.stimuli(1:numTrials) == sessDat.data.behavior(1:numTrials); 
 end
 
 corrTrialInds = find(corrIncorrVals);
@@ -151,11 +154,11 @@ incorrOffsetTimes = trialLastClockTimes(~corrIncorrVals);
 
 %compare pc calculated from session info
 %For integrated, only want visual+ir (not vis only, or ir only)
-sessBeh = sessDat.data.behavior(1:numTrialsEvents);
+sessBeh = sessDat.data.behavior(1:numTrials);
 if isequal(sessDat.protocol, 'irVisualIntegrationTask')
-    sessStim = sessDat.data.stimuli_visir(1:numTrialsEvents);
+    sessStim = sessDat.data.stimuli_visir(1:numTrials);
 else
-    sessStim = sessDat.data.stimuli(1:numTrialsEvents);
+    sessStim = sessDat.data.stimuli(1:numTrials);
 end
 sessCorrIncorr = sessBeh == sessStim;
 sessPCCalc = mean(sessCorrIncorr);
@@ -584,87 +587,27 @@ end
 %   set(gcf,'Renderer','OpenGL')
 %All: green correct/red incorrect
 if plotPopvecs | plotFull
-    disp('Plotting all population vector trajectories...this may take a minute.')
-    figure;
-    for trialNum = 1: numTrials
-        %if rem(trialNum,40) == 0
-        %    disp(['Plotting trial ' num2str(trialNum) '/' num2str(numTrials)]);
-        %end
-        popVec=popvecSequences{trialNum};
-        numSubstim = size(popVec,1);
-        colorVals = linspace(.98,.2,numSubstim);
-        
-        if numSubstim %don't try to plot if there are no substim
-            for subStimNum = 1: numSubstim
-               colSub=colorVals(subStimNum)*ones(1,3);  %for paper
-%                 if corrIncorrVals(trialNum)
-%                     colSub=[colorVals(subStimNum) 1 colorVals(subStimNum)]; % ones(1,3); %green hues
-%                 else
-%                     colSub=[1 colorVals(subStimNum) colorVals(subStimNum)]; 
-%                 end
-                scatter(popVec(subStimNum,1), popVec(subStimNum,2), 25, 'filled', 'CData', colSub);hold on
-
-                if subStimNum < numSubstim
-                   plot([popVec(subStimNum,1), popVec(subStimNum+1,1)], ...
-                       [popVec(subStimNum,2), popVec(subStimNum+1,2)],'Color',colSub);
-                end
-
-            end %for subStimNum
-        end %if numSubstim
-    end
-    plot([-maxFreq*2 0 maxFreq*2 0 -maxFreq*2], [0 maxFreq*2 0 -maxFreq*2 0],'k','LineWidth', 1); %the square
-    title([animalName ' ' strrep(dateStr, '_', '/') ' all ' num2str(numTrials) ' trials'])
-    grid on; axis equal;
-    axis([-maxFreq*2 maxFreq*2 -maxFreq*2 maxFreq*2]);
-    set(gca,'XTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-        'XTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-    set(gca,'YTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-        'YTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-    gridfix([.85 .85 .85])  
-    set(gcf,'Renderer','OpenGL')   
+    % plot all
+    plot_stimulus_population(popvecSequences, animalName, maxFreq, dateStr); 
+    
+%     % plot correct
+%     popvecSequencesSubset ={};
+%     for trialInd = 1:numTrialsCorrect
+%         popvecSequencesSubset{end+1}=popvecSequences{corrTrialInds(trialInd)};
+%     end
+%     plot_stimulus_population(popvecSequencesCorrect,animalName, maxFreq, dateStr);
+%     
+%     % plot incorrect
+%     popvecSequencesSubset ={};
+%     for trialInd = 1:numTrialsIncorrect
+%         popvecSequencesSubset{end+1}=popvecSequences{incorrTrialInds(trialInd)};
+%     end
+%     plot_stimulus_population(popvecSequencesSubset,animalName, maxFreq, dateStr);
+%     
     if printOn
         print
     end
 end
-
-  
-%% Just correct
-% if plotFull
-%     figure;
-%     for trialInd = 1: numTrialsCorrect
-%         trialNum = corrTrialInds(trialInd);
-% 
-%         if rem(trialNum,40) == 0
-%             disp(['Plotting trial ' num2str(trialInd) '/' num2str(numTrialsCorrect)]);
-%         end
-%         popVec=popvecSequences{trialNum};
-%         numSubstim = size(popVec,1);
-%         colorVals = linspace(.95, 0,numSubstim);
-%         for subStimNum = 1: numSubstim
-%             colSub=colorVals(subStimNum)*ones(1,3);
-%             scatter(popVec(subStimNum,1), popVec(subStimNum,2), 25, 'filled', 'CData', colSub);hold on
-%             if subStimNum < numSubstim
-%                plot([popVec(subStimNum,1), popVec(subStimNum+1,1)], ...
-%                    [popVec(subStimNum,2), popVec(subStimNum+1,2)],'Color',colSub);
-%             end
-% 
-%             %text(popVec(1, subStimNum)+.025, popVec(2, subStimNum), num2str(subStimNum));
-%         end
-%     end
-%     plot([-maxFreq*2 0 maxFreq*2 0 -maxFreq*2], [0 maxFreq*2 0 -maxFreq*2 0],'k','LineWidth', 1); %the square
-%     grid on;axis equal;
-%     title([animalName ' ' strrep(dateStr, '_', '/') ' correct trials'])
-%     axis([-maxFreq*2 maxFreq*2 -maxFreq*2 maxFreq*2]);
-%     set(gca,'XTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-%         'XTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-%     set(gca,'YTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-%         'YTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-%     set(gcf,'Renderer','OpenGL')   
-%     %gridfix([.85 .85 .85])    
-%     shg;
-% 
-% end
-
 
 %% Following is if you are printing for paper
 %{ 
@@ -674,44 +617,6 @@ end
 %}
     
 %set(gcf,'Renderer','OpenGL')    %if printer won't work
-  
-% 
-% %% Just incorrect
-% if plotFull
-%     figure;
-%     for trialInd = 1: numTrialsIncorrect
-%         trialNum = incorrTrialInds(trialInd);
-% 
-%         if rem(trialNum,40) == 0
-%             disp(['Plotting trial ' num2str(trialInd) '/' num2str(numTrialsCorrect)]);
-%         end
-%         popVec=popvecSequences{trialNum};
-%         numSubstim = size(popVec,1);
-%         colorVals = linspace(.98, 0,numSubstim);
-%         for subStimNum = 1: numSubstim
-%             colSub=colorVals(subStimNum)*ones(1,3);
-%             scatter(popVec(subStimNum,1), popVec(subStimNum,2), 25, 'filled', 'CData', colSub);hold on
-%             if subStimNum < numSubstim
-%                plot([popVec(subStimNum,1), popVec(subStimNum+1,1)], ...
-%                    [popVec(subStimNum,2), popVec(subStimNum+1,2)],'Color',colSub);
-%             end
-% 
-%             %text(popVec(1, subStimNum)+.025, popVec(2, subStimNum), num2str(subStimNum));
-%         end
-%     end
-%     plot([-maxFreq*2 0 maxFreq*2 0 -maxFreq*2], [0 maxFreq*2 0 -maxFreq*2 0],'k','LineWidth', 1); %the square
-%     grid on
-%     set(gca,'XTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-%         'XTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-%     set(gca,'YTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-%         'YTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-%     axis equal;shg;gridfix([.9 .9 .9])
-%     shg  
-%     title([animalName ' ' strrep(dateStr, '_', '/') ' incorrect trials'])
-%     grid on;gridfix([.85 .85 .85])    
-%     shg;
-% end
-% %set(gcf,'Renderer','OpenGL')    %if printer won't work
 
 
 %% save all data, and subset of data for subsequent neuronal analysis

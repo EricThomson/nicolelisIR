@@ -2,95 +2,6 @@
 %%
 %Central hub for loading and analyzing all stimuli and neuronal data for cohort of animals.
 %
-%To do:
-%1. Note one place you need to automate in neuronalAnalysis6: 
-%   responseInds = [83:88; 96:101; 109:114; 122:127; 135:140; 148:153];
-% This is part of channelPsthPlotScript. For someone like Ford where stim
-% duration is variable, this will be fubar.
-% 
-% This looks at indices to quantify responses, but when you change duration etc (Ford) this will change
-% 5b. Similar for countDuration = 0.06; This will vary depending on stimu duration\
-% But obviously also 
-% 
-% How did I even get these response Inds? 
-%   Go into channelPsthPlotScript for nitty-gritty of psth bits until now you just have 
-%   things in units of windows and times, not bin indices. You shoudl probably be calculating
-%
-%2. RF width and centers will need to be normalized to stimulation max, no?
-% This can be done once you have integrated/collated all the data.
-%
-%3. Response versus stim magnitude is going to depend on max frequency, so be
-%   careful this will not be comparable across animals or even sessions if you use
-%   variable maxFreq! We haven't worked this out yet.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%
-%BEHAVIOR/STIM ANALYSIS
-%General settings
-close all
-clear
-plotFull =  1;  %Plots microdetails including tick marks for timing of events
-plotPopvecs = 0;  %plot stimulus population vectors (all trajectories)
-plotPopvecCycles = 0;  %plot individual population vector cycles to look through
-printOn = 0; %popvec actual/possible (grey/red), and trajectories (depending on plot settings)
-
-%% Brian (V1 implant IR only right now)
-animalName = 'brian';
-numSessions = 2;
-dateStrings = {'02_29_16', '03_02_16'};
-numTrialsAll =[231 250];
-maxFreqAll = [425 425];  %
-
-%% Quagmire (V1 implant, IR task only)
-animalName = 'quagmire';
-numSessions = 2;
-dateStrings = {'03_02_16', '03_14_16'};
-numTrialsAll =[208, 80];
-maxFreqAll = [425 425];  %
-
-%% Amber (S1 and thalamus implant, IR task only)
-animalName = 'amber';
-numSessions = 3;
-dataStrings = {'12_15_16', '12_16_16'};
-numTrialsAll = {};
-
-%% Analyze one session (mainly to make sure things are working)
-sessNum = 1;
-if sessNum <= numSessions
-    dateStr = dateStrings{sessNum}; 
-    numTrials = numTrialsAll(sessNum); 
-    maxFreq = maxFreqAll(sessNum);
-    datFolder = ['C:\Users\Nicolab\Desktop\irData\' animalName '\' dateStr] 
-    stimulusAnalysis
-else
-    warning('stimulusAnalysis run -- Check session number')
-end
-display('done running behavior for one')
-
-%% Run all stim/behavior analysis for an animal
-for sessNum = 1: numSessions
-    fprintf('\n\n')
-    display(['Analyzing session ' num2str(sessNum) '/' num2str(numSessions) ' for ' animalName]);
-    if sessNum <= numSessions
-        dateStr = dateStrings{sessNum}; 
-        numTrials = numTrialsAll(sessNum); 
-        maxFreq = maxFreqAll(sessNum);
-        datFolder = ['C:\Users\Nicolab\Desktop\irData\' animalName '\' dateStr] ;
-        stimulusAnalysis
-    else
-        disp('Check session number')
-    end
-    disp('**************');
-    pause(1);
-    close all;
-end
-beep;
-fprintf('\n****************\n')
-display(['Done analyzing data for ' animalName '!!']);
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-
 %%%%%%%%%%%%%%%%%%%%%%
 %% NEURONAL ANALYSIS 
 %%
@@ -98,18 +9,12 @@ display(['Done analyzing data for ' animalName '!!']);
 clear; close all; common_neuronal_prep
 
 %% Animal-specific neuronal prep
-%% Brian (V1 implant IR only right now)
-cd('C:\Users\Nicolab\Desktop\irData\brian');
-brian_neuronal_prep
-
-%% Quagmire
-cd('C:\Users\Nicolab\Desktop\irData\quagmire')
-quagmire_neuronal_prep
-
-
+%% Amber
+cd('C:\Users\Nicolab\Desktop\irData\amber');
+amber_neuronal_prep
 
 %% Run one neuronal (after common_neuronal prep and then animalName_neuronal_prep)
-sessNum = 1;
+sessNum = 3;
 if sessNum <= numSessions  
     dateStr = dateStrings{sessNum}; 
     numTrials = numTrialsAll(sessNum); 
@@ -154,14 +59,27 @@ print -depsc2 brianPsths
 export_fig brianPopvecTrajectories.pdf -pdf -transparent 
 
 %}
+%% Re-plot prior analysis
+sessNum = 3;
+if sessNum <= numSessions  
+    dateStr = dateStrings{sessNum}; 
+    numTrials = numTrialsAll(sessNum); 
+    maxFreq = maxFreqAll(sessNum);
+    artifactChannels = artifactChannelAll{sessNum};
+    datFolder = ['C:\Users\Nicolab\Desktop\irData\' animalName '\' dateStr] ;
+    datFolderNeuro = ['C:\Users\Nicolab\Desktop\irData\' animalName '\' dateStr];
+    viewAnalysis
+else
+    display('Out of range')
+end
 
 %% After running all neuronal animals, pool data:
 %Go through all sessions for all animals and pull data such as rf diameters, rf centers, max z score dist, etc
 
-%% First animal -- Brian-- this is different as you initialize and do first save of fullNeuronalData_s1v1
+%% First animal -- Amber-- this is different as you initialize and do first save of fullNeuronalData_thalamus
 %%Neuronal preparation (common to all animals)
 clear;close all; common_neuronal_prep;
-brian_neuronal_prep;
+amber_neuronal_prep;
 combinedDataFolder = 'C:\Users\Nicolab\Desktop\irData\dataCombined';  
 %%Recall individual variabels saved in neuronalAnalysisN
 % mnRespByNum_indexBased x
@@ -221,7 +139,7 @@ maxFreqAll = maxFreq;
 
 % Once first is done then can append data to existing arrays and structures.
 for sessNum = 2: numSessions
-    %disp(['Pooling data from ' animalName ' session ' num2str(sessNum) '/' num2str(numSessions)])
+    disp(['Pooling data from ' animalName ' session ' num2str(sessNum) '/' num2str(numSessions)])
     dateStr = dateStrings{sessNum}; 
     datFolder = ['C:\Users\Nicolab\Desktop\irData\' animalName '\' dateStr] ;
     cd(datFolder)
@@ -244,12 +162,12 @@ for sessNum = 2: numSessions
     proportionChannelsActiveAll = [proportionChannelsActiveAll; proportionChannelsActivated]; %NEW
     maxFreqAll = [maxFreqAll; maxFreq]; %NEW
 end
-%fprintf(['Done pooling data from ' animalName '\n'])
+fprintf(['Done pooling data from ' animalName '\n'])
 
 %Save that shit!
 cd(combinedDataFolder)
 try
-    save fullNeuronalData_s1v1 animalNamesAll sessionDatesAll mnRespByNumAll rfCentersAll rfDiametersAll ...
+    save fullNeuronalData_thalamus animalNamesAll sessionDatesAll mnRespByNumAll rfCentersAll rfDiametersAll ...
                                numSubstimAllSessions peakZScoresAll respByNumAll baselineMeansAll channelNumbersAll ...
                                mnPsthZAllSessions popvecsAll stimFreqsAll proportionChannelsActiveAll maxFreqAll
     fprintf(['\nBullseye! Data saved for ' animalName '! \n'])                       

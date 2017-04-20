@@ -167,7 +167,7 @@ disp('Done pulling artifact psth');
 %     title(['Artifact psth, trial ' num2str(trial) ', substim ' num2str(substim)])
 % end
 
-%% Pull artfifact onset/offset times for each substim (use Use allArtifactPsths and artifactPsthBinEdges)
+%% Vote-based extraction of artfifact onset/offset times for each substim (use Use allArtifactPsths and artifactPsthBinEdges)
 %Recall what we just made
 % sumArtifactPsths{trialNum} is a 1 x numSubstim cell array, eahc contains 1 x numBins psth
 % allArtifactBinEdges{trialNum} is 1xnumSubStim cell array that gives bin edges for the psths 
@@ -191,7 +191,7 @@ for trialNum = 1 : numTrials
     trialWindows = [];
     if numSubstim == 0
         artifactOnTime = substimOnsetTimesTmp +.005; 
-        artifactOffTime = artifactOnTime + artifactDuration;  
+        artifactOffTime = artifactOnTime + artifactDurations;  
         artifactOnTimes = [artifactOnTimes; artifactOnTime];
         artifactOffTimes = [artifactOffTimes; artifactOffTime];
         artifactDurations = [artifactDurations; artifactOffTime - artifactOnTime];
@@ -214,7 +214,7 @@ for trialNum = 1 : numTrials
                     artifactOnTime = tmpHistBinEdges(histThreshCrossBin);
                 end           
             end %check substim onset artifact time
-            artifactOffTime = artifactOnTime + artifactDuration;  
+            artifactOffTime = artifactOnTime + artifactDurations;  
             artifactOnTimes = [artifactOnTimes; artifactOnTime];
             artifactOffTimes = [artifactOffTimes; artifactOffTime];
             artifactDurations = [artifactDurations; artifactOffTime - artifactOnTime];
@@ -328,6 +328,7 @@ baselineMeans = zeros(1, numChannels);
 allBaselineCounts = zeros(numTrials, numChannels);
 allSubstimCounts = zeros(totalNumSubstim, numChannels);
 mnPsthZAll = zeros(numChannels, numSubstimMin);
+mnPsthAll = {};
 plotIndividualChannels = 0;  %this is part of channelPsthPlotScript don't want to plot every psth detail
 for channelNumber = 1 : numChannels
     channelName = chanNamesMultiunit{channelNumber};
@@ -336,6 +337,10 @@ for channelNumber = 1 : numChannels
     channelPsthPlotScript;  %script gets fullMeanPsth, fullMeanPsthZ
     for responseNum = 1: numSubstimMin
         mnPsthZAll(channelNumber, responseNum) = mean(fullMeanPsthZ(responseInds(responseNum,:)));
+    end
+    mnPsthAll{end + 1}= fullMeanPsth;%save for later
+    if plotMinimal | plotFull | plotIndividualChannels
+        plot_psth(channelNumber, chanNamesMultiunit,  fullMeanPsth);
     end
     baselineMeans(channelNumber) = mean(baselineCounts);
     allBaselineCounts(:, channelNumber) = baselineCounts';
@@ -360,42 +365,13 @@ end
 
 %% Plot mean 3x3 population vector trajectory (this only needs doing once each session!)
 if plotMinimal | plotFull
-    figure;
-    colorVals = linspace(.75,0,numSubstimMin);
-    popVec = mnNPopvecs;
-    for substimNum = 1: numSubstimMin
-        %display(substimNum)
-        %colSub=[colorVals(substimNum) colorVals(substimNum) colorVals(substimNum)]; 
-        colSub=[1 colorVals(substimNum) colorVals(substimNum)]; %for paper to superimpose
-        scatter3(popVec(substimNum,1), popVec(substimNum,2), 10, 45, 'filled', 'CData', colSub);hold on
-        if substimNum < numSubstimMin
-           if substimNum ~= numSubstimMin/2
-               plot3([popVec(substimNum,1), popVec(substimNum+1,1)], ...
-                   [popVec(substimNum,2), popVec(substimNum+1,2)], [10 10], 'Color',colSub,'LineWidth',2);
-           else  %dashed line connected 3..4
-               plot3([popVec(substimNum,1), popVec(substimNum+1,1)], ...
-                  [popVec(substimNum,2), popVec(substimNum+1,2)], [10 10], ':','Color',colSub,'LineWidth',1);
-           end
-        end
-    end
-    
-    plot([-maxFreq*2 0 maxFreq*2 0 -maxFreq*2], [0 maxFreq*2 0 -maxFreq*2 0],'k','LineWidth', 1); %the square
-    title(['Mean trajectory start/end ' animalName ' ' strrep(dateStr, '_', '/')])
-    grid on; axis equal;
-    axis([-maxFreq*2 maxFreq*2 -maxFreq*2 maxFreq*2])
-    set(gca,'XTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-        'XTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-    set(gca,'YTick',[-maxFreq*2:maxFreq: maxFreq*2], ...
-        'YTickLabel', {'-fmax*2', '-fmax', '0', 'fmax', 'fmax*2'});
-    gridfix([.85 .85 .85])  
-    shg;
+    plot_3x3_popvec(animalName, maxFreq, mnNPopvecs, numSubstimMin, dateStr);
     if printOn
         set(gcf,'Renderer','OpenGL')  
         print
         pause(0.1)
     end
 end
-
 
 %{
 %to save
@@ -419,11 +395,19 @@ imageFilter=fspecial('gaussian', filterWidth, filterSigma);
 rfCenters = zeros(numChannels,2);
 rfDiameters = zeros(numChannels,1);
 peakZScores = zeros(numChannels, 1);
+rfXVals = {};
+rfYVals = {};
+rfXMaxVal = {};
+rfYMaxVal = {};
+rfContour = {};
+rfValsFilteredArray = {};
+
+
 if plotMinimal
     figure;
 end
 for channelNum = 1:numChannels
-    %channelNum = 11
+%     channelNum = 11
     channelName = chanNamesMultiunit{channelNum};
     disp(['RF calculation ' channelName]);
     channelBaseMean = baselineMeans(channelNum);
@@ -440,6 +424,8 @@ for channelNum = 1:numChannels
     %
     xVals = xGrid(1,:)';
     yVals = yGrid(:,1);
+    rfXVals{channelNum} = xVals;
+    rfYVals{channelNum} = yVals;
     
     %binWidthHists = (maxFreq*2)/4;
     %binCenters  = [-maxFreq*2: binWidthHists:maxFreq*2];  %85
@@ -490,6 +476,9 @@ for channelNum = 1:numChannels
     maxCoordinate = [xMaxVal yMaxVal];
     rfCenters(channelNum,:) = maxCoordinate;
     
+    rfXMaxVal{channelNum} = xMaxVal;
+    rfYMaxVal{channelNum} = yMaxVal;
+    
     % Get surface area at 0.75 max.
     rfHeightContour = 0.75;
     roundDigits = 4;
@@ -500,6 +489,8 @@ for channelNum = 1:numChannels
     rfMinVal = min(rfValsFiltered(:));
     rfValsFiltered = rfValsFiltered - rfMinVal;
     
+    rfValsFilteredArray{channelNum} = rfValsFiltered;
+    
     contourHeights = round([0 .1 .25 .5 .75 .95]*rfMaxVal*10^roundDigits)/10^roundDigits;  
     C = contourc(xVals, yVals, rfValsFiltered, contourHeights);
     [ A ] = contourArea( C );
@@ -509,19 +500,9 @@ for channelNum = 1:numChannels
     rfHeightArea = max(rfHeightAreas); %in case there are multiple peaks
     rfDiameter = 2*sqrt(rfHeightArea/pi);
     
-    if plotMinimal | plotFull
-        subplot(4,4,channelNum);
-        contour(xVals, yVals,  rfValsFiltered, contourHeights);hold on
-        plot([-maxFreq*2 0 maxFreq*2 0 -maxFreq*2], [0 maxFreq*2 0 -maxFreq*2 0], 'k','LineWidth', 1); %the square
-        %title([animalName ' ' strrep(dateStr, '_', '/') '. Neuron ' channelName '. Diam=' num2str(rfDiameter)])
-        scatter(xMaxVal, yMaxVal, 10, 'filled', 'MarkerEdgeColor', 'k', 'LineWidth', 1, 'MarkerFaceColor', 'r');
-        set(gca,'XTick', [], 'YTick', []);
-        axis equal;
-        %colorbar
-        %plot_circle([xMaxVal, yMaxVal], rfDiameter/2, 'r', 1) ;shg
-        axis tight;
-        title(channelName);shg
-    end
+    rfContour{channelNum} = contourHeights;
+    
+    plot_single_neuron_rf (channelNum, channelName, maxFreq,contourHeights,xMaxVal,xVals,yMaxVal,yVals,rfValsFiltered)
     rfDiameters(channelNum) = rfDiameter;
 
 end
@@ -533,23 +514,15 @@ if plotMinimal | plotFull
     disp('Done plotting RFs');
 end
 
+%Save data for re-plotting
+rfData = {rfXVals rfYVals rfXMaxVal rfYMaxVal rfContour rfValsFilteredArray};
 %% Peak z scores
-if plotFull
-    [mnPeakZ, semPeakZ] = mean_sem(peakZScores);
-    [medianPeakZ, seMedianPeakZ] = median_sem(peakZScores, 500);
-    figure;
-    plot([0 numChannels+1],[mnPeakZ mnPeakZ], 'r');hold on
-    plot([0 numChannels+1],[medianPeakZ medianPeakZ], 'b')
-    legend({'Mean', 'Median'}, 'Location', 'NorthWest')
-    scatter([1: numChannels], sort(peakZScores,'ascend'),'k','filled');hold on
-    axis([0 numChannels+1 -1 max(peakZScores)+0.1*max(peakZScores)])
-    plot([0 numChannels+1],[0 0], 'k')
-    title([animalName ' ' strrep(dateStr, '_', '/') ' peak z score (from filtered RF)'])
-    if printOn
-        print
-    end
+[mnPeakZ, semPeakZ] = mean_sem(peakZScores);
+[medianPeakZ, seMedianPeakZ] = median_sem(peakZScores, 500);
+if 1
+        plot_peakZ(mnPeakZ, medianPeakZ,peakZScores,numChannels,animalName,dateStr)
 end
-
+zScoreData = {mnPeakZ, semPeakZ, medianPeakZ, seMedianPeakZ, peakZScores};
 
 %% Calculate mean/sem spike counts for activation of different numbers of IR channels
 %uses stimFreqs
@@ -651,17 +624,7 @@ end %channel num
 [mnRespByNum_indexBased, semRespByNum] = mean_sem(responseByNum_indexBased);
 
 if plotMinimal | plotFull
-    figure;
-    subplot(2,1,1)
-    bar([0:4], proportionChannelsActivated, 'k');
-    ylabel('Proportion of substim');
-    title([animalName ' ' strrep(dateStr, '_', '/') ' #active']);
-
-    subplot(2,1,2)
-    bar([0 1 2 3 4], mnRespByNum_indexBased, 'k');hold on;
-    plot_errorbars([0 1 2 3 4], mnRespByNum_indexBased, semRespByNum, 0, 'k', 1);
-    xlabel('Number of stimulators active (index based)')
-    ylabel('Z Score')
+    plot_number_substim(proportionChannelsActivated, responseByNum_indexBased,animalName,dateStr)
 
     if printOn
         print
@@ -688,8 +651,9 @@ save neuronalAnalysis
 cd(datFolder)
 saveNeuroString = ['save neurAnalysis_' animalName '_' dateStr ...
             ' mnRespByNum_indexBased rfCenters rfDiameters numSubstimAll '  ...
-            ' peakZScores responseByNum_indexBased baselineMeans channelNumbers ' ...
-            ' mnPsthZAll allPopvecs stimFreqs proportionChannelsActivated maxFreq'];
+            ' zScoreData responseByNum_indexBased baselineMeans channelNumbers ' ...
+            ' mnPsthZAll allPopvecs stimFreqs proportionChannelsActivated maxFreq chanNamesMultiunit '...
+            ' mnPsthAll mnNStimFreqs mnNPopvecs allBaselineCounts allSubstimCounts rfData'];
 eval(saveNeuroString);
 
 

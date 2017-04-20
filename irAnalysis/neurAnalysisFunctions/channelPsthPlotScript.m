@@ -233,26 +233,4 @@ for substimEpoch = 1: numSubstimMin + 1
 end
 
 
-%% Plot the psth
 
-if plotMinimal | plotFull | plotIndividualChannels 
-    if numChannels <= 16
-        subplot(4,4,channelNumber);
-    else
-        subplot(5,4,channelNumber);
-    end
-    tickBins = [26:25:242];  %-500, -250, 0
-    bar(fullMeanPsth, 1, 'k');axis tight
-    set(gca,'XTick', tickBins); %[76 89 102 135 148 161]);
-    set(gca,'XTickLabel', [-0.5:0.25:1.5])%{'S1', 'S2', 'S3', 'SN-2', 'SN-1', 'S_N'});
-    %axis([1 242 0 3.75])
-    %rotateXLabels( gca(), 45)
-    shg
-    %bar(binCentersPlot, fullMeanPsth, 1, 'k');axis tight
-    %bar(fullMeanPsthZ, 1, 'k');
-    axis tight
-    %set(gca,'XTick',75)
-    %print -depsc2 singlePsth
-    title(channelName)
-    shg;
-end
